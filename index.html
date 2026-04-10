@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice Control Panel</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
+    .card { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    button { padding: 12px 20px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .btn-start { background: #22c55e; color: white; }
+    .btn-stop { background: #ef4444; color: white; }
+    input { padding: 10px; width: 80%; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; text-align: center; }
+    .log { background: #eee; padding: 10px; margin-top: 10px; border-radius: 5px; min-height: 40px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>تحكم بالصوت (HTTPS)</h2>
+  <p>أدخل عنوان IP الـ ESP32:</p>
+  <input type="text" id="espIp" placeholder="مثلاً 192.168.1.15" value="">
+  
+  <div class="log" id="statusText">جاهز للاستماع...</div>
+  <div class="log" id="recognizedText" style="color: #2563eb;">الكلام المكتشف يظهر هنا</div>
+
+  <button class="btn-start" onclick="startListening()">ابدأ الاستماع</button>
+  <button class="btn-stop" onclick="stopListening()">إيقاف</button>
+</div>
+
+<script>
+  const statusText = document.getElementById("statusText");
+  const recognizedText = document.getElementById("recognizedText");
+  const espIpInput = document.getElementById("espIp");
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+
+    recognition.onresult = (event) => {
+      const text = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+      recognizedText.innerText = "قلت: " + text;
+
+      if (text.includes("on")) sendCommand("on");
+      if (text.includes("off")) sendCommand("off");
+    };
+
+    recognition.onerror = (e) => statusText.innerText = "خطأ: " + e.error;
+  }
+
+  function startListening() { recognition.start(); statusText.innerText = "جاري الاستماع..."; }
+  function stopListening() { recognition.stop(); statusText.innerText = "توقف الاستماع"; }
+
+  async function sendCommand(cmd) {
+    const ip = espIpInput.value;
+    if (!ip) { alert("يرجى إدخال IP الجهاز أولاً"); return; }
+    
+    try {
+      const response = await fetch(`http://${ip}/${cmd}`);
+      const data = await response.text();
+      statusText.innerText = "الرد من ESP: " + data;
+    } catch (err) {
+      statusText.innerText = "فشل الاتصال بـ " + ip;
+    }
+  }
+</script>
+</body>
+</html>

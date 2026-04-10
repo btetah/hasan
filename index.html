@@ -1,40 +1,47 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Voice Control - Debug Mode</title>
+  <title>Khatak Robot Control</title>
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Robot">
+
   <style>
-    body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
-    .card { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    
-    /* ستايل إشارة الاتصال */
-    .status-bar { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; padding: 10px; border-radius: 8px; font-weight: bold; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f0f4f8; margin: 0; padding: 20px; }
+    .card { max-width: 450px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .status-bar { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; padding: 12px; border-radius: 12px; font-weight: bold; transition: 0.3s; }
     .online { background: #dcfce7; color: #166534; }
     .offline { background: #fee2e2; color: #991b1b; }
-    .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-    
-    button { padding: 12px 20px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 80%; }
-    .btn-start { background: #2563eb; color: white; }
-    input { padding: 10px; width: 80%; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; text-align: center; }
-    .log { background: #f8fafc; padding: 10px; margin-top: 10px; border-radius: 5px; font-size: 13px; border: 1px solid #e2e8f0; }
+    .listening { background: #fef3c7; color: #92400e; border: 2px solid #fbbf24; }
+    .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-left: 10px; }
+    input { padding: 12px; width: 85%; margin: 15px 0; border: 1px solid #cbd5e1; border-radius: 10px; text-align: center; font-size: 16px; }
+    button { padding: 15px 25px; width: 90%; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 18px; transition: 0.2s; }
+    .btn-start { background: #2563eb; color: white; margin-bottom: 10px; }
+    .btn-start:active { transform: scale(0.98); background: #1d4ed8; }
+    .log-box { background: #f8fafc; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #e2e8f0; min-height: 50px; }
+    .small-hint { font-size: 12px; color: #64748b; margin-top: 10px; }
   </style>
 </head>
 <body>
 
 <div class="card">
   <div id="connectionStatus" class="status-bar offline">
+    <span id="statusLabel">جاري التحقق من الشبكة...</span>
     <span id="statusDot" class="dot" style="background: #ef4444;"></span>
-    <span id="statusLabel">جاري فحص الاتصال بالـ ESP...</span>
   </div>
 
-  <h3>تحكم الروبوت بالصوت</h3>
+  <h2>لوحة تحكم btetah</h2>
   <input type="text" id="espIp" placeholder="IP أو robot.local" value="robot.local">
   
-  <button class="btn-start" onclick="startListening()">ابدأ الاستماع للآوامر</button>
+  <button class="btn-start" onclick="startListening()">🎤 ابدأ الاستماع</button>
   
-  <div class="log" id="recognizedText">الكلام المكتشف يظهر هنا</div>
-  <div class="log" id="debugLog" style="color: #64748b;">سجل العمليات...</div>
+  <div class="log-box" id="recognizedText">تحدث ليتم تحويل صوتك لنص...</div>
+  <div class="log-box" id="debugLog" style="font-size: 12px; color: #71717a;">سجل العمليات جاهز</div>
+  
+  <p class="small-hint">قل "شغل" أو "طفي" للتحكم باللد</p>
 </div>
 
 <script>
@@ -44,51 +51,84 @@
   const debugLog = document.getElementById("debugLog");
   const espIpInput = document.getElementById("espIp");
 
-  // دالة فحص الاتصال التلقائي كل 3 ثواني
+  let isMicActive = false;
+
+  // 1. فحص الاتصال التلقائي
   async function checkESP() {
+    if (isMicActive) return; // توقف عن الفحص إذا المايك شغال لمنع التضارب
+    
     const ip = espIpInput.value;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // وقت انتظار 2 ثانية
-
+      setTimeout(() => controller.abort(), 3000); 
       const response = await fetch(`http://${ip}/status`, { signal: controller.signal });
       if (response.ok) {
-        statusLabel.innerText = "متصل بالـ ESP32";
+        statusLabel.innerText = "متصل بالروبوت";
         statusDot.style.background = "#22c55e";
         connectionStatus.className = "status-bar online";
       }
     } catch (err) {
-      statusLabel.innerText = "غير متصل بالـ ESP32";
+      statusLabel.innerText = "غير متصل (تأكد من الشبكة)";
       statusDot.style.background = "#ef4444";
       connectionStatus.className = "status-bar offline";
     }
   }
+  setInterval(checkESP, 5000);
 
-  setInterval(checkESP, 3000); // افحص كل 3 ثواني
-
-  // كود التعرف على الصوت (نفس السابق)
+  // 2. إعداد الميكروفون
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
 
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.onresult = (e) => {
-      const text = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
-      document.getElementById("recognizedText").innerText = "قلت: " + text;
-      if (text.includes("on")) sendCommand("on");
-      if (text.includes("off")) sendCommand("off");
+    recognition.lang = "ar-IQ"; // لغة عراقية
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      isMicActive = true;
+      connectionStatus.className = "status-bar listening";
+      statusLabel.innerText = "أسمعك الآن...";
+      statusDot.style.background = "#fbbf24";
+      debugLog.innerText = "الميكروفون نشط";
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+      document.getElementById("recognizedText").innerText = "سمعتك تقول: " + text;
+      
+      if (text.includes("شغل") || text.includes("on")) sendCommand("on");
+      if (text.includes("طفي") || text.includes("off")) sendCommand("off");
+    };
+
+    recognition.onerror = (e) => {
+      debugLog.innerText = "خطأ: " + e.error;
+      isMicActive = false;
+    };
+
+    recognition.onend = () => {
+      isMicActive = false;
+      debugLog.innerText = "توقف الميكروفون";
     };
   }
 
-  function startListening() { recognition.start(); debugLog.innerText = "الميكروفون يعمل..."; }
+  function startListening() {
+    if (!SpeechRecognition) {
+      alert("متصفحك لا يدعم التعرف على الصوت");
+      return;
+    }
+    recognition.start();
+  }
 
+  // 3. إرسال الأوامر
   async function sendCommand(cmd) {
+    const ip = espIpInput.value;
     try {
-      await fetch(`http://${espIpInput.value}/${cmd}`);
-      debugLog.innerText = "تم إرسال أمر: " + cmd;
-    } catch (e) {
-      debugLog.innerText = "فشل إرسال الأمر";
+      const response = await fetch(`http://${ip}/${cmd}`);
+      const data = await response.text();
+      debugLog.innerText = "تم التنفيذ: " + data;
+    } catch (err) {
+      debugLog.innerText = "فشل الاتصال بـ " + ip;
     }
   }
 </script>

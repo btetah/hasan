@@ -3,139 +3,137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Khatak - Always Listening</title>
+  <title>Khatak - Smart Assistant</title>
   
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <style>
-    body { font-family: sans-serif; text-align: center; background: #0f172a; color: white; padding: 20px; }
-    .card { max-width: 450px; margin: auto; background: #1e293b; padding: 30px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); }
+    body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #0f172a; color: white; padding: 20px; }
+    .card { max-width: 500px; margin: auto; background: #1e293b; padding: 30px; border-radius: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
     
-    .status-indicator { 
-      padding: 15px; border-radius: 15px; font-weight: bold; margin-bottom: 20px;
-      transition: all 0.5s ease;
-    }
+    .status-bar { padding: 15px; border-radius: 15px; font-weight: bold; margin-bottom: 25px; transition: 0.5s; }
     .online { background: #064e3b; color: #34d399; }
-    .listening { background: #78350f; color: #fbbf24; border: 2px solid #fbbf24; animation: pulse 1.5s infinite; }
+    .listening { background: #78350f; color: #fbbf24; border: 2px solid #fbbf24; animation: pulse 2s infinite; }
     .offline { background: #7f1d1d; color: #f87171; }
 
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.6; }
-      100% { opacity: 1; }
-    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
     button { 
       padding: 20px; width: 100%; border: none; border-radius: 15px; 
       font-size: 20px; font-weight: bold; cursor: pointer;
-      background: #2563eb; color: white; margin-top: 20px;
+      background: #2563eb; color: white; margin-top: 10px; transition: 0.3s;
     }
+    .btn-stop { background: #dc2626 !important; }
     
-    .voice-text { background: #334155; padding: 20px; border-radius: 15px; margin-top: 20px; min-height: 60px; font-size: 18px; color: #e2e8f0; }
-    input { background: #334155; border: 1px solid #475569; color: white; padding: 10px; border-radius: 8px; width: 80%; text-align: center; margin-bottom: 10px; }
+    .display-text { background: #334155; padding: 20px; border-radius: 15px; margin-top: 20px; min-height: 80px; font-size: 20px; color: #f1f5f9; border: 1px solid #475569; }
+    input { background: #334155; border: 1px solid #475569; color: white; padding: 12px; border-radius: 10px; width: 90%; text-align: center; margin-bottom: 15px; font-size: 16px; }
+    .debug { font-size: 11px; margin-top: 15px; color: #94a3b8; }
   </style>
 </head>
 <body>
 
 <div class="card">
-  <div id="connectionStatus" class="status-indicator offline">جاري الفحص...</div>
+  <div id="statusIndicator" class="status-bar offline">جاري فحص الاتصال...</div>
 
-  <h2>الروبوت الذكي (استماع دائم)</h2>
+  <h2>مساعد Khatak الذكي</h2>
   <input type="text" id="espIp" value="robot.local">
   
-  <button id="mainBtn" onclick="toggleListening()">تشغيل وضع المساعد الذكي</button>
+  <button id="actionBtn" onclick="toggleSystem()">تشغيل المساعد (استماع دائم)</button>
   
-  <div class="voice-text" id="recognizedText">اضغط الزر وابدأ بالكلام...</div>
-  <div id="debugLog" style="font-size: 11px; margin-top: 10px; color: #94a3b8;">الحالة: جاهز</div>
+  <div class="display-text" id="voiceOutput">اضغط الزر للبدء...</div>
+  <div class="debug" id="debugLog">الحالة: جاهز للعمل</div>
 </div>
 
 <script>
   const espIpInput = document.getElementById("espIp");
-  const statusIndicator = document.getElementById("connectionStatus");
-  const recognizedText = document.getElementById("recognizedText");
+  const statusIndicator = document.getElementById("statusIndicator");
+  const voiceOutput = document.getElementById("voiceOutput");
   const debugLog = document.getElementById("debugLog");
-  const mainBtn = document.getElementById("mainBtn");
+  const actionBtn = document.getElementById("actionBtn");
 
-  let isAlwaysOn = false;
+  let isRunning = false;
   let recognition = null;
 
-  // 1. فحص الاتصال بالـ ESP32
-  async function checkESP() {
-    if (isAlwaysOn) return; 
+  // 1. فحص الاتصال التلقائي (يتوقف عند تفعيل المايك)
+  async function checkConnectivity() {
+    if (isRunning) return;
     try {
-      const resp = await fetch(`http://${espIpInput.value}/status`, { signal: AbortSignal.timeout(2000) });
-      if (resp.ok) {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`http://${espIpInput.value}/status`, { signal: controller.signal });
+      if (res.ok) {
         statusIndicator.innerText = "متصل بالروبوت ✅";
-        statusIndicator.className = "status-indicator online";
+        statusIndicator.className = "status-bar online";
       }
     } catch (e) {
       statusIndicator.innerText = "غير متصل ❌";
-      statusIndicator.className = "status-indicator offline";
+      statusIndicator.className = "status-bar offline";
     }
   }
-  setInterval(checkESP, 5000);
+  setInterval(checkConnectivity, 5000);
 
-  // 2. إعداد محرك الصوت
+  // 2. إعداد محرك التعرف على الصوت
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = "ar-IQ"; 
-    recognition.continuous = true; // يبقى مفتوحاً
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true; // استجابة لحظية دون انتظار الصمت
 
     recognition.onstart = () => {
-      isAlwaysOn = true;
-      statusIndicator.innerText = "أنا أسمعك الآن (دائماً) 🎤";
-      statusIndicator.className = "status-indicator listening";
-      mainBtn.innerText = "إيقاف المساعد الذكي";
-      mainBtn.style.background = "#dc2626";
+      isRunning = true;
+      statusIndicator.innerText = "أنا أسمعك الآن... 🎤";
+      statusIndicator.className = "status-bar listening";
+      actionBtn.innerText = "إيقاف المساعد";
+      actionBtn.classList.add("btn-stop");
     };
 
     recognition.onresult = (event) => {
-      const lastResultIndex = event.results.length - 1;
-      const text = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
-      recognizedText.innerText = "سمعتك تقول: " + text;
+      let interimTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        interimTranscript += event.results[i][0].transcript;
+      }
       
-      // معالجة الأوامر
+      const text = interimTranscript.toLowerCase();
+      voiceOutput.innerText = text;
+      
+      // تنفيذ فوري بمجرد التقاط الكلمة
       if (text.includes("شغل") || text.includes("on")) sendCommand("on");
       if (text.includes("طفي") || text.includes("off")) sendCommand("off");
     };
 
     recognition.onend = () => {
-      // هذه هي الحركة السحرية: إذا انطفأ المايك تلقائياً، نعيد تشغيله
-      if (isAlwaysOn) {
-        debugLog.innerText = "إعادة تشغيل الاستماع تلقائياً...";
-        recognition.start();
+      if (isRunning) {
+        debugLog.innerText = "إعادة تشغيل تلقائية للمايك...";
+        setTimeout(() => { recognition.start(); }, 300);
       }
     };
 
     recognition.onerror = (e) => {
-      debugLog.innerText = "خطأ: " + e.error;
-      // في حالة خطأ "no-speech" المتصفح يغلق المايك، الـ onend ستتكفل بإعادته
+      debugLog.innerText = "خطأ في المايك: " + e.error;
     };
   }
 
-  function toggleListening() {
-    if (!isAlwaysOn) {
+  function toggleSystem() {
+    if (!isRunning) {
       recognition.start();
     } else {
-      isAlwaysOn = false;
+      isRunning = false;
       recognition.stop();
-      mainBtn.innerText = "تشغيل وضع المساعد الذكي";
-      mainBtn.style.background = "#2563eb";
-      statusIndicator.innerText = "تم إيقاف الاستماع";
-      statusIndicator.className = "status-indicator online";
+      actionBtn.innerText = "تشغيل المساعد (استماع دائم)";
+      actionBtn.classList.remove("btn-stop");
     }
   }
 
   async function sendCommand(cmd) {
+    const ip = espIpInput.value;
     try {
-      await fetch(`http://${espIpInput.value}/${cmd}`);
-      debugLog.innerText = "تم تنفيذ أمر: " + cmd;
+      await fetch(`http://${ip}/${cmd}`);
+      debugLog.innerText = "آخر أمر نُفذ: " + cmd;
     } catch (err) {
-      debugLog.innerText = "فشل إرسال الأمر للـ ESP";
+      debugLog.innerText = "فشل إرسال الأمر للـ ESP32";
     }
   }
 </script>
